@@ -76,21 +76,26 @@ def updated() {
 
 def initialize()
 {
-	["Lock","Unlock","Open","Close","Arrive","Leave","Knock"].each { type ->
-    	log.debug ( "${type}: " + (notifications.contains(type)?"true":"false"))
-	}
 	state.lastArival = 0
 	state.lastMotion = 0
-    lock1.capabilities.each {cap ->
-    log.debug "This device supports the ${cap.name} capability"
+    motionSensor.supportedCommands.each {com ->
+    	log.debug "Supported Command: ${com.name}"
 	}
-    lock1.supportedAttributes.each {cap ->
-    log.debug "This device supports the ${cap.name} attribute"
-	}
-    lock1.supportedCommands.each {cap ->
-    log.debug "This device supports the ${cap.name} command"
-	}
-    subscribe(lock1, "lock.locked", doorLocked)
+    for (mstate in motionSensor.statesSince("motion",new Date()-1)) {
+    	log.debug("state: $mstate.stringValue date: $mstate.date.time")
+    	if (mstate.stringValue == "active" && state.lastMotion < mstate.date.time) {
+        	 state.lastMotion = mstate.date.time
+        }
+    }
+    for (psensor in people) {
+    	for (mstate in psensor.statesSince("presence",new Date()-1)) {
+    		if (mstate.stringValue == "present" && state.lastArival < mstate.date.time) {
+        		state.lastArival = mstate.date.time
+        	}
+    	}
+    }
+    log.debug("state: $state")
+	subscribe(lock1, "lock.locked", doorLocked)
 	subscribe(lock1, "lock.unlocked", doorUnlocked)
 	subscribe(openSensor, "contact.closed", doorClosed)
 	subscribe(openSensor, "contact.open", doorOpen)
@@ -120,16 +125,16 @@ def message(type,text) {
 }
 def lockDoor()
 {
-    if((openSensor.latestValue("contact") == "closed")){
+    if((openSensor.currentValue("contact") == "closed")){
     	lock1.lock()
     } else {
-    	runIn( 10, lockDoor )
+    	runIn( 5, lockDoor )
     }
 }
 
 def unlockDoor()
 {
-	if ((openSensor.latestValue("contact") == "closed")) {
+	if ((openSensor.currentValue("contact") == "closed")) {
     	lock1.unlock()
     } else {
     	runIn( 5, unlockDoor )
@@ -145,7 +150,6 @@ def present(evt)
 def absent(evt)
 {
     message ("Leave",evt.descriptionText)
-	state.lastArival = 0
 }
 
 def doorMotion(evt) {
@@ -176,17 +180,14 @@ def doorUnlocked(evt) {
 }
 
 def doorKnock(evt) {
-   	state.lastKnock=now()
     message ("Knock",(knockSensor.label?:knockSensor.name)+ " was knocked on")
-  	if(openSensor.latestValue("contact") == "closed") {
-  		if (lock1.latestValue("lock") == "locked") {
-    		if (state.lastMotion + timeOffset(motionTimeout) > now()) {
-    			unlockDoor()
-    		} else if (state.lastArival + timeOffset(arivalTimeout) > now()) {
-       			unlockDoor();
-			}
-    	} else {
-       		lockDoor()
-       	}
-	}
+  	if (lock1.currentValue("lock") == "locked") {
+    	if (state.lastMotion + timeOffset(motionTimeout) > now()) {
+    		unlockDoor()
+    	} else if (state.lastArival + timeOffset(arivalTimeout) > now()) {
+    		unlockDoor();
+		}
+    } else {
+    	lockDoor()
+    }
 }

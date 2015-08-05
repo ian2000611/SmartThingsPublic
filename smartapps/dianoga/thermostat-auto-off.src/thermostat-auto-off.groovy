@@ -26,8 +26,31 @@ preferences {
     	input("sensors", "capability.contactSensor", title: "Sensors", multiple: true)
         input("delay", "number", title: "Delay (seconds)")
     }
+	section( "Notifications" ) {
+		input "sendPushMessage", "enum", title: "Send a push notification?", options: ["Yes", "No"], required: false
+		input "phone", "phone", title: "Send a Text Message?", required: false
+        input "notifications", "enum", title: "notify on which events?", options:["Debug","On","Off","Open","Close"], multiple:true
+    }
 }
 
+def message(type,text) {
+	if (notifications.contains(type)) {
+		log.info(text)
+		if (!sendPushMessage) {
+    		if (!phone) {
+    	    	sendNotificationEvent(text)
+	        } else {
+        		sendNotification(text,[method:'phone','phone':phone])
+        	}
+    	} else {
+	    	if (!phone) {
+        		sendNotification(text,[method:'push'])
+        	} else {
+        		sendNotification(text,[method:'both','phone':phone])
+    	    }
+	    }
+    }
+}
 def installed() {
 	log.debug "Installed with settings: ${settings}"
 
@@ -48,16 +71,19 @@ def initialize() {
 }
 
 def sensorChange(evt) {
-	log.debug "Desc: $evt.value , $state"
+	message("Debug", "Desc: $evt.value , $state")
     if(evt.value == 'open' && !state.changed) {
+    	message("Open", "$evt.displayName was opened")
     	unschedule()
         runIn(delay, 'turnOff')
     } else if(evt.value == 'closed' && state.changed) {
     	// All closed?
         def isOpen = false
+        message("Close", "$evt.displayName was closed")
         for(sensor in sensors) {
         	if(sensor.id != evt.deviceId && sensor.currentValue('contact') == 'open') {
         		isOpen = true
+                message("Debug", "$sensor.name is still open")
             }
         }
         
@@ -69,7 +95,7 @@ def sensorChange(evt) {
 }
 
 def turnOff() {
-	log.debug "Turning off thermostat due to contact open"
+	message("Off", "Turning off thermostat due to contact open")
 	state.thermostatMode = thermostat.currentValue("thermostatMode")
 	thermostat.off()
     state.changed = true
@@ -77,7 +103,7 @@ def turnOff() {
 }
 
 def restore() {
-    log.debug "Setting thermostat to $state.thermostatMode"
+    message("On", "Setting thermostat to $state.thermostatMode")
     thermostat.setThermostatMode(state.thermostatMode)
     state.changed = false
 }
