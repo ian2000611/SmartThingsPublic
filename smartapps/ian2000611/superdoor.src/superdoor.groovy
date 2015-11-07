@@ -149,11 +149,17 @@ def present(evt)
 
 def absent(evt)
 {
+	if (state.unlockedFrom=="inside") {
+    	lockDoor()
+    }
     message ("Leave",evt.descriptionText)
 }
 
 def doorMotion(evt) {
     state.lastMotion = now()
+    if (state.unlockedFrom=="outside") {
+    	lockDoor()
+    }
 }
 
 def doorOpen(evt) {
@@ -168,12 +174,22 @@ def doorClosed(evt) {
 }
 
 def doorLocked(evt) {
+	state.unlockedFrom = "none"
+    log.debug("state: $state")
     message ("Lock",evt.descriptionText)
     unschedule( lockDoor )
 }
 
 def doorUnlocked(evt) {
     message ("Unlock",evt.descriptionText)
+    for (word in evt.descriptionText.tokenize()) {
+    	if (word == "manually") {
+        	state.unlockedFrom = "inside"
+        } else if (word == "code") {
+        	state.unlockedFrom = "outside"
+        }
+    }
+    log.debug("state: $state")
     unschedule( lockDoor )
     def delay = relockAfter * 60          // runIn uses seconds
     runIn( delay, lockDoor )                // ...schedule to lock in x minutes.
@@ -183,11 +199,11 @@ def doorKnock(evt) {
     message ("Knock",(knockSensor.label?:knockSensor.name)+ " was knocked on")
   	if (lock1.currentValue("lock") == "locked") {
     	if (state.lastMotion + timeOffset(motionTimeout) > now()) {
+        	state.unlockedFrom = "inside"
     		unlockDoor()
     	} else if (state.lastArival + timeOffset(arivalTimeout) > now()) {
+        	state.unlockedFrom = "outside"
     		unlockDoor();
 		}
-    } else {
-    	lockDoor()
     }
 }

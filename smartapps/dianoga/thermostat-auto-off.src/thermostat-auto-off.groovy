@@ -76,21 +76,22 @@ def sensorChange(evt) {
     	message("Open", "$evt.displayName was opened")
     	unschedule()
         runIn(delay, 'turnOff')
-    } else if(evt.value == 'closed' && state.changed) {
+    } else if(evt.value == 'closed') {
     	// All closed?
         def isOpen = false
-        message("Close", "$evt.displayName was closed")
+     	message("Close", "$evt.displayName was closed")
         for(sensor in sensors) {
         	if(sensor.id != evt.deviceId && sensor.currentValue('contact') == 'open') {
         		isOpen = true
-                message("Debug", "$sensor.name is still open")
-            }
+	            message("Debug", "$sensor.name is still open")
+    	    }
         }
-        
-        if(!isOpen) {
+        if (!isOpen) {
         	unschedule()
-        	runIn(delay, 'restore')
-        }
+        	if(state.changed) {
+        		runIn(delay, 'restore')
+        	}
+		}
     }
 }
 
