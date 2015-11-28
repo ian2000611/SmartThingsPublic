@@ -66,13 +66,12 @@ def setSunset(evt) {
 }
 
 def changeSunMode(newMode) {
-  state.sunMode = newMode
-
+  
   if(everyoneIsAway() && (location.mode == newAwayMode)) {
     log.debug("Mode is away, not evaluating")
   }
-
-  else if(location.mode != newMode) {
+  
+  else if(location.mode == state.sunMode) {
     def message = "${app.label} changed your mode to '${newMode}'"
     send(message)
     setLocationMode(newMode)
@@ -81,9 +80,15 @@ def changeSunMode(newMode) {
   else {
     log.debug("Mode is the same, not evaluating")
   }
+  state.sunMode = newMode
+
 }
 
 def presence(evt) {
+  def restoreMode = (state.lastMode != null) ? state.lastMode : sunMode
+  if (state.lastMode == newSunsetMode || state.lastMode == newSunriseMode) {
+    restoreMode = state.sunMode
+  }
   if(evt.value == "not present") {
     log.debug("Checking if everyone is away")
 
@@ -95,13 +100,13 @@ def presence(evt) {
   }
 
   else {
-    if(location.mode != state.sunMode) {
+    if(location.mode != restoreMode) {
       log.debug("Checking if anyone is home")
 
       if(anyoneIsHome()) {
         log.info("Starting ${state.sunMode} sequence")
 
-        changeSunMode(state.sunMode)
+        setLocationMode(restoreMode)
       }
     }
 
@@ -117,6 +122,7 @@ def setAway() {
       def message = "${app.label} changed your mode to '${newAwayMode}' because everyone left home"
       log.info(message)
       send(message)
+      state.lastMode = location.mode
       setLocationMode(newAwayMode)
     }
 
